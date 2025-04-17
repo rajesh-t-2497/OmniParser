@@ -12,3 +12,4 @@ wget-log
 weights/
 omnitool/gradio/uploads/
 .DS_Store
+/.vs
