@@ -11,6 +11,9 @@ import base64, os
 from util.utils import check_ocr_box, get_yolo_model, get_caption_model_processor, get_som_labeled_img
 import torch
 from PIL import Image
+# Load model directly
+# from transformers import AutoModel
+# model = AutoModel.from_pretrained("microsoft/OmniParser-v2.0", trust_remote_code=True)
 
 yolo_model = get_yolo_model(model_path='weights/icon_detect/model.pt')
 caption_model_processor = get_caption_model_processor(model_name="florence2", model_name_or_path="weights/icon_caption_florence")
