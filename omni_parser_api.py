@@ -112,18 +112,16 @@ async def ocr_only(
     file: UploadFile = File(...),
     use_paddleocr: bool = Form(True)
 ):
-    """
-    Extract text from an image using OCR only.
-    
-    - **file**: The image file to process
-    - **use_paddleocr**: Whether to use PaddleOCR (True) or EasyOCR (False)
-    
-    Returns extracted text, bounding boxes, and optionally a base64-encoded annotated image.
-    """
     try:
+        # Debugging log
+        print("Received OCR request")
+        
         # Read the image file
         contents = await file.read()
+        print("File read successfully")
+        
         image_input = Image.open(io.BytesIO(contents))
+        print("Image opened successfully")
         
         # OCR processing
         ocr_bbox_rslt, _ = check_ocr_box(
@@ -134,34 +132,54 @@ async def ocr_only(
             easyocr_args={'paragraph': False, 'text_threshold': 0.9}, 
             use_paddleocr=use_paddleocr
         )
+        print("OCR processing completed")
+        
         text, ocr_bbox = ocr_bbox_rslt
         
-        # Convert OCR bounding boxes to a more API-friendly format
-        formatted_boxes = []
-        for i, box in enumerate(ocr_bbox):
-            formatted_boxes.append({
-                "id": i,
-                "text": text[i],
-                "box": box.tolist() if hasattr(box, 'tolist') else box,
-                "confidence": box[4] if len(box) > 4 else None
-            })
+        # Use get_som_labeled_img to generate the annotated image
+        box_overlay_ratio = image_input.size[0] / 3200
+        draw_bbox_config = {
+            'text_scale': 0.8 * box_overlay_ratio,
+            'text_thickness': max(int(2 * box_overlay_ratio), 1),
+            'text_padding': max(int(3 * box_overlay_ratio), 1),
+            'thickness': max(int(3 * box_overlay_ratio), 1),
+        }
         
-        # Optionally create an annotated image
-        annotated_image = draw_ocr_boxes(image_input, ocr_bbox, text)
-        buffered = io.BytesIO()
-        annotated_image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        dino_labeled_img, _, _ = get_som_labeled_img(
+            image_input, 
+            None,  # No YOLO model needed for OCR-only
+            BOX_TRESHOLD=0.0,  # Not applicable for OCR-only
+            output_coord_in_ratio=True, 
+            ocr_bbox=ocr_bbox,
+            draw_bbox_config=draw_bbox_config, 
+            caption_model_processor=None,  # No captioning needed for OCR-only
+            ocr_text=text,
+            iou_threshold=0.0,  # Not applicable for OCR-only
+            imgsz=640  # Default image size
+        )
         
+        # Convert the annotated image to base64
+        img_base64 = dino_labeled_img  # Already base64 encoded by get_som_labeled_img
+        
+        print("Response prepared successfully")
         return {
             "text": text,
-            "boxes": formatted_boxes,
+            "boxes": [
+                {
+                    "id": i,
+                    "text": text[i],
+                    "box": box.tolist() if hasattr(box, 'tolist') else box,
+                    "confidence": box[4] if len(box) > 4 else None
+                }
+                for i, box in enumerate(ocr_bbox)
+            ],
             "image_base64": img_base64
         }
-    
     except Exception as e:
+        print(f"Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OCR processing error: {str(e)}")
 
 if __name__ == "__main__":
-    import uvicorn=
+    import uvicorn
     #uvicorn.run(app, host="0.0.0.0", port=8000)
     uvicorn.run("omni_parser_api:app", host="0.0.0.0", port=8000, reload=True, workers=1)

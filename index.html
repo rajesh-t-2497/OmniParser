@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniParser Frontend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+        .output {
+            margin-top: 20px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        #loading {
+            font-weight: bold;
+            color: blue;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OmniParser Frontend</h1>
+        <form id="omniParserForm">
+            <label for="api_choice">Choose API:</label><br>
+            <input type="radio" id="process_api" name="api_choice" value="process" checked>
+            <label for="process_api">Process API</label><br>
+            <input type="radio" id="ocr_api" name="api_choice" value="ocr">
+            <label for="ocr_api">OCR API</label><br><br>
+
+            <label for="file">Upload Image:</label><br>
+            <input type="file" id="file" name="file" accept="image/*" required><br><br>
+
+            <div id="processParams">
+                <label for="box_threshold">Box Threshold:</label><br>
+                <input type="number" id="box_threshold" name="box_threshold" step="0.01" min="0.01" max="1.0" value="0.05"><br><br>
+
+                <label for="iou_threshold">IOU Threshold:</label><br>
+                <input type="number" id="iou_threshold" name="iou_threshold" step="0.01" min="0.01" max="1.0" value="0.1"><br><br>
+
+                <label for="use_paddleocr">Use PaddleOCR:</label>
+                <input type="checkbox" id="use_paddleocr" name="use_paddleocr" checked><br><br>
+
+                <label for="imgsz">Image Size:</label><br>
+                <input type="number" id="imgsz" name="imgsz" step="32" min="640" max="1920" value="640"><br><br>
+            </div>
+
+            <button type="submit">Process Image</button>
+        </form>
+
+        <div class="output" id="output">
+            <h2>Output</h2>
+            <div id="loading">Processing... Please wait.</div>
+            <img id="outputImage" alt="Processed Image" style="display: none;">
+            <pre id="outputText"></pre>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('omniParserForm');
+        const outputImage = document.getElementById('outputImage');
+        const outputText = document.getElementById('outputText');
+        const loading = document.getElementById('loading');
+        const processParams = document.getElementById('processParams');
+
+        // Toggle visibility of parameters based on API choice
+        document.querySelectorAll('input[name="api_choice"]').forEach((radio) => {
+            radio.addEventListener('change', (event) => {
+                if (event.target.value === 'process') {
+                    processParams.style.display = 'block';
+                } else {
+                    processParams.style.display = 'none';
+                }
+            });
+        });
+
+        form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(form);
+
+    // Determine which API to call
+    const apiChoice = document.querySelector('input[name="api_choice"]:checked').value;
+    const apiUrl = apiChoice === 'process' ? 'http://localhost:8000/process' : 'http://localhost:8000/ocr';
+
+    // Show the loading indicator and clear previous outputs
+    loading.style.display = 'block';
+    outputImage.style.display = 'none';
+    outputText.textContent = '';
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Display the output image if available
+        if (data.image_base64) {
+            outputImage.src = `data:image/png;base64,${data.image_base64}`;
+            outputImage.style.display = 'block';
+        }
+
+        // Display the parsed elements or OCR text
+        if (apiChoice === 'process') {
+            outputText.textContent = JSON.stringify(data.parsed_elements, null, 2);
+        } else {
+            outputText.textContent = JSON.stringify(data.text, null, 2);
+        }
+    } catch (error) {
+        outputText.textContent = `Error: ${error.message}`;
+        outputImage.style.display = 'none';
+    } finally {
+        // Hide the loading indicator
+        loading.style.display = 'none';
+    }
+});
+    </script>
+</body>
+</html>
